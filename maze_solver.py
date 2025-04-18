@@ -2,31 +2,32 @@ import pygame
 import math
 from queue import PriorityQueue
 
-# Screen size
+# Initialize Pygame
 pygame.init()
 pygame.font.init()
+
+# Window dimensions
 WIDTH = 600
-WIN = pygame.display.set_mode((WIDTH, WIDTH + 100))  # Increased height to fit buttons
+HEIGHT = WIDTH + 100  # extra space for buttons
+ROWS = 30
+WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Maze Solver AI - A* Pathfinding")
 
 # Colors
-WHITE = (255, 255, 255)
-GREY = (128, 128, 128)
-BLACK = (0, 0, 0)
-GREEN = (0, 255, 0)
-RED = (255, 0, 0)
-BLUE = (64, 224, 208)
-ORANGE = (255, 165, 0)
-PURPLE = (160, 32, 240)
-
-ROWS = 30  # Maze will be 30x30 grid
+WHITE   = (255,255,255)
+GREY    = (128,128,128)
+BLACK   = (  0,  0,  0)
+ORANGE  = (255,165,  0)
+PURPLE  = (160, 32,240)
+GREEN   = (  0,255,  0)
+RED     = (255,  0,  0)
+BLUE    = ( 64,224,208)
 
 class Spot:
     def __init__(self, row, col, width):
-        self.row = row
-        self.col = col
-        self.x = row * width
-        self.y = col * width
+        self.row, self.col = row, col
+        self.x = col * width
+        self.y = row * width
         self.color = WHITE
         self.neighbors = []
         self.width = width
@@ -34,20 +35,8 @@ class Spot:
     def get_pos(self):
         return self.row, self.col
 
-    def is_closed(self):
-        return self.color == RED
-
-    def is_open(self):
-        return self.color == GREEN
-
     def is_barrier(self):
         return self.color == BLACK
-
-    def is_start(self):
-        return self.color == ORANGE
-
-    def is_end(self):
-        return self.color == PURPLE
 
     def reset(self):
         self.color = WHITE
@@ -55,45 +44,43 @@ class Spot:
     def make_start(self):
         self.color = ORANGE
 
-    def make_closed(self):
-        self.color = RED
-
-    def make_open(self):
-        self.color = GREEN
+    def make_end(self):
+        self.color = PURPLE
 
     def make_barrier(self):
         self.color = BLACK
 
-    def make_end(self):
-        self.color = PURPLE
-
     def make_path(self):
-        self.color = BLUE
+        self.color = (255, 255, 0)
+
+    def make_open(self):
+        self.color = (174, 198, 255)
+
+    def make_closed(self):
+        self.color = (255, 179, 179)
 
     def draw(self, win):
         pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.width))
 
     def update_neighbors(self, grid):
         self.neighbors = []
-        if self.row < ROWS - 1 and not grid[self.row + 1][self.col].is_barrier():  # Down
-            self.neighbors.append(grid[self.row + 1][self.col])
-        if self.row > 0 and not grid[self.row - 1][self.col].is_barrier():  # Up
-            self.neighbors.append(grid[self.row - 1][self.col])
-        if self.col < ROWS - 1 and not grid[self.row][self.col + 1].is_barrier():  # Right
-            self.neighbors.append(grid[self.row][self.col + 1])
-        if self.col > 0 and not grid[self.row][self.col - 1].is_barrier():  # Left
-            self.neighbors.append(grid[self.row][self.col - 1])
+        if self.row < ROWS-1 and not grid[self.row+1][self.col].is_barrier():
+            self.neighbors.append(grid[self.row+1][self.col])
+        if self.row > 0 and not grid[self.row-1][self.col].is_barrier():
+            self.neighbors.append(grid[self.row-1][self.col])
+        if self.col < ROWS-1 and not grid[self.row][self.col+1].is_barrier():
+            self.neighbors.append(grid[self.row][self.col+1])
+        if self.col > 0 and not grid[self.row][self.col-1].is_barrier():
+            self.neighbors.append(grid[self.row][self.col-1])
 
 def h(p1, p2):
-    # Heuristic (Manhattan distance)
-    x1, y1 = p1
-    x2, y2 = p2
-    return abs(x1 - x2) + abs(y1 - y2)
+    return abs(p1[0]-p2[0]) + abs(p1[1]-p2[1])
 
-def reconstruct_path(came_from, current, draw):
+def reconstruct_path(came_from, current, draw, start):
     while current in came_from:
         current = came_from[current]
-        current.make_path()
+        if current != start:  # Skip the start point
+            current.make_path()  # Make the path color for the correct spots
         draw()
 
 def algorithm(draw, grid, start, end):
@@ -101,33 +88,34 @@ def algorithm(draw, grid, start, end):
     open_set = PriorityQueue()
     open_set.put((0, count, start))
     came_from = {}
-    g_score = {spot: float("inf") for row in grid for spot in row}
+
+    g_score = {spot: float('inf') for row in grid for spot in row}
     g_score[start] = 0
-    f_score = {spot: float("inf") for row in grid for spot in row}
+    f_score = {spot: float('inf') for row in grid for spot in row}
     f_score[start] = h(start.get_pos(), end.get_pos())
 
     open_set_hash = {start}
 
     while not open_set.empty():
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
                 pygame.quit()
+                return False
 
         current = open_set.get()[2]
         open_set_hash.remove(current)
 
         if current == end:
-            reconstruct_path(came_from, end, draw)
+            reconstruct_path(came_from, end, draw, start)  # Pass start here
             end.make_end()
             return True
 
         for neighbor in current.neighbors:
-            temp_g_score = g_score[current] + 1
-
-            if temp_g_score < g_score[neighbor]:
+            temp_g = g_score[current] + 1
+            if temp_g < g_score[neighbor]:
                 came_from[neighbor] = current
-                g_score[neighbor] = temp_g_score
-                f_score[neighbor] = temp_g_score + h(neighbor.get_pos(), end.get_pos())
+                g_score[neighbor] = temp_g
+                f_score[neighbor] = temp_g + h(neighbor.get_pos(), end.get_pos())
                 if neighbor not in open_set_hash:
                     count += 1
                     open_set.put((f_score[neighbor], count, neighbor))
@@ -135,76 +123,64 @@ def algorithm(draw, grid, start, end):
                     neighbor.make_open()
 
         draw()
-
         if current != start:
             current.make_closed()
 
     return False
 
 def make_grid(rows, width):
-    grid = []
     gap = width // rows
-    for i in range(rows):
-        grid.append([])
-        for j in range(rows):
-            spot = Spot(i, j, gap)
-            grid[i].append(spot)
-    return grid
+    return [[Spot(r, c, gap) for c in range(rows)] for r in range(rows)]
 
-def draw_grid(win, rows, width):
+def draw_grid_lines(win, rows, width):
     gap = width // rows
     for i in range(rows):
-        pygame.draw.line(win, GREY, (0, i * gap), (width, i * gap))
-        for j in range(rows):
-            pygame.draw.line(win, GREY, (j * gap, 0), (j * gap, width))
+        pygame.draw.line(win, GREY, (0, i*gap), (width, i*gap))
+        pygame.draw.line(win, GREY, (i*gap, 0), (i*gap, width))
 
 def draw(win, grid, rows, width):
     win.fill(WHITE)
-
-    # Title
-    font = pygame.font.SysFont("arial", 30)
-    text = font.render("Maze Solver AI", True, (0, 0, 0))
-    win.blit(text, (WIDTH // 2 - text.get_width() // 2, 10))
-
-    # Buttons
-    button_width = 120
-    button_height = 50
-    spacing = 40  # space between buttons
-
-    total_button_width = 2 * button_width + spacing
-    start_x = (WIDTH - total_button_width) // 2
-    y = WIDTH + 20
-
-    # Reset button
-    pygame.draw.rect(win, (200, 0, 0), (start_x, y, button_width, button_height))
-    reset_text = font.render("Reset", True, (255, 255, 255))
-    win.blit(reset_text, (start_x + (button_width - reset_text.get_width()) // 2, y + 10))
-
-    # Quit button
-    pygame.draw.rect(win, (0, 0, 200), (start_x + button_width + spacing, y, button_width, button_height))
-    quit_text = font.render("Quit", True, (255, 255, 255))
-    win.blit(quit_text, (start_x + button_width + spacing + (button_width - quit_text.get_width()) // 2, y + 10))
-
-    # Draw grid
     for row in grid:
         for spot in row:
             spot.draw(win)
-    draw_grid(win, rows, width)
+    draw_grid_lines(win, rows, width)
+
+    # Title
+    font = pygame.font.SysFont('arial', 30)
+    text = font.render("Maze Solver AI", True, BLACK)
+    win.blit(text, (width//2 - text.get_width()//2, 10))
+
+    # Buttons
+    bw, bh, sp = 120, 50, 40
+    total = 2*bw + sp
+    x0 = (width - total)//2
+    y0 = width + 20
+
+    # Reset button
+    pygame.draw.rect(win, RED, (x0, y0, bw, bh))
+    rt = font.render("Reset", True, WHITE)
+    win.blit(rt, (x0 + (bw-rt.get_width())//2, y0 + (bh-rt.get_height())//2))
+
+    # Quit button
+    qx = x0 + bw + sp
+    pygame.draw.rect(win, BLUE, (qx, y0, bw, bh))
+    qt = font.render("Quit", True, WHITE)
+    win.blit(qt, (qx + (bw-qt.get_width())//2, y0 + (bh-qt.get_height())//2))
+
     pygame.display.update()
 
-
 def get_clicked_pos(pos, rows, width):
+    x, y = pos
     gap = width // rows
-    y, x = pos
+    if x < 0 or x >= width or y < 0 or y >= width:
+        return None, None
     row = y // gap
     col = x // gap
     return row, col
 
 def main(win, width):
     grid = make_grid(ROWS, width)
-
-    start = None
-    end = None
+    start = end = None
 
     run = True
     while run:
@@ -213,67 +189,56 @@ def main(win, width):
             if event.type == pygame.QUIT:
                 run = False
 
-            if pygame.mouse.get_pressed()[0]:  # Left click
-                pos = pygame.mouse.get_pos()
-                row, col = get_clicked_pos(pos, ROWS, width)
+            elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEMOTION and pygame.mouse.get_pressed()[0]:
+                mx, my = pygame.mouse.get_pos()  # current mouse pos
+                bw, bh, sp = 120, 50, 40
+                total = 2*bw + sp
+                x0 = (width - total)//2
+                y0 = width + 20
+
+                # Reset clicked?
+                if event.type == pygame.MOUSEBUTTONDOWN and x0 < mx < x0+bw and y0 < my < y0+bh:
+                    grid = make_grid(ROWS, width)
+                    start = end = None
+                    continue
+
+                # Quit clicked?
+                if event.type == pygame.MOUSEBUTTONDOWN and x0+bw+sp < mx < x0+2*bw+sp and y0 < my < y0+bh:
+                    pygame.quit()
+                    return
+
+                # Grid area?
+                row, col = get_clicked_pos((mx, my), ROWS, width)
+                if row is None: 
+                    continue
                 spot = grid[row][col]
+
+                # If dragging or initial click, create barrier
+                if spot not in (start, end):
+                    spot.make_barrier()
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE and start and end:
+                    for r in grid:
+                        for spot in r:
+                            spot.update_neighbors(grid)
+                    algorithm(lambda: draw(win, grid, ROWS, width), grid, start, end)
+
+        # handle explicit left-click without motion (for placing start/end)
+        if pygame.mouse.get_pressed()[0]:
+            mx, my = pygame.mouse.get_pos()
+            row, col = get_clicked_pos((mx,my), ROWS, width)
+            if row is not None:
+                spot = grid[row][col]
+                # first two clicks set start/end
                 if not start:
                     start = spot
                     start.make_start()
                 elif not end and spot != start:
                     end = spot
                     end.make_end()
-                elif spot != end and spot != start:
-                    spot.make_barrier()
-
-            elif pygame.mouse.get_pressed()[2]:  # Right click to erase
-                pos = pygame.mouse.get_pos()
-                row, col = get_clicked_pos(pos, ROWS, width)
-                spot = grid[row][col]
-                spot.reset()
-                if spot == start:
-                    start = None
-                elif spot == end:
-                    end = None
-
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and start and end:
-                    for row in grid:
-                        for spot in row:
-                            spot.update_neighbors(grid)
-                    algorithm(lambda: draw(win, grid, ROWS, width), grid, start, end)
-
-            if pygame.mouse.get_pressed()[0]:  # LEFT
-                pos = pygame.mouse.get_pos()
-                row, col = get_clicked_pos(pos, ROWS, width)
-
-    if row < ROWS and col < ROWS:
-        spot = grid[row][col]
-        if not start and spot != end:
-            start = spot
-            start.make_start()
-
-        elif not end and spot != start:
-            end = spot
-            end.make_end()
-
-        elif spot != end and spot != start:
-            spot.make_barrier()
-
-    # Reset Button
-    if WIDTH // 2 - 60 < pos[0] < WIDTH // 2 + 60 and WIDTH + 20 < pos[1] < WIDTH + 70:
-        grid = make_grid(ROWS, width)
-        start = None
-        end = None
-
-    # Quit Button
-    elif 3 * WIDTH // 4 - 60 < pos[0] < 3 * WIDTH // 4 + 60 and WIDTH + 20 < pos[1] < WIDTH + 70:
-        pygame.quit()
-        return
-
 
     pygame.quit()
-
 
 if __name__ == "__main__":
     main(WIN, WIDTH)
