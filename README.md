@@ -52,7 +52,7 @@ Quit the Application: Press the **Quit** button to **exit the program**.
 - Black: Barriers (impassable)
 - Yellow: Final path (shortest path)
 - Light Blue: Open nodes (nodes currently being considered)
-- Red: Closed nodes (nodes already evaluated)
+- Pastel Red: Closed nodes (nodes already evaluated)
 
 ## Instructions
 1. Place the start and end points by clicking on the grid.
