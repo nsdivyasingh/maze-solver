@@ -89,27 +89,22 @@ class MazeAgent:
         self.grid = grid
 
     def perceive(self):
-        # Scan visible area
         visible_cells = []
         for row in self.grid:
             for spot in row:
-                if random.random() < 0.9:  # 90% visibility
+                if random.random() < 0.9:
                     visible_cells.append(spot)
         return visible_cells
 
     def act(self, draw_callback):
-        # Update neighbors
         for row in self.grid:
             for spot in row:
                 spot.update_neighbors(self.grid)
-        # Execute the A* algorithm
         self.path_found = algorithm(draw_callback, self.grid, self.start, self.end)
         return self.path_found
     
     def plan(self, draw, visible_cells):
-        # Placeholder implementation for the plan method
         pass
-
 
 def h(p1, p2):
     return abs(p1[0]-p2[0]) + abs(p1[1]-p2[1])
@@ -117,8 +112,8 @@ def h(p1, p2):
 def reconstruct_path(came_from, current, draw, start):
     while current in came_from:
         current = came_from[current]
-        if current != start:  # Skip the start point
-            current.make_path()  # Make the path color for the correct spots
+        if current != start:
+            current.make_path()
         draw()
 
 def algorithm(draw, grid, start, end):
@@ -144,7 +139,7 @@ def algorithm(draw, grid, start, end):
         open_set_hash.remove(current)
 
         if current == end:
-            reconstruct_path(came_from, end, draw, start)  # Pass start here
+            reconstruct_path(came_from, end, draw, start)
             end.make_end()
             return True
 
@@ -194,12 +189,10 @@ def draw(win, grid, rows, width):
     x0 = (width - total)//2
     y0 = width + 20
 
-    # Reset button
     pygame.draw.rect(win, RED, (x0, y0, bw, bh))
     rt = font.render("Reset", True, WHITE)
     win.blit(rt, (x0 + (bw-rt.get_width())//2, y0 + (bh-rt.get_height())//2))
 
-    # Quit button
     qx = x0 + bw + sp
     pygame.draw.rect(win, BLUE, (qx, y0, bw, bh))
     qt = font.render("Quit", True, WHITE)
@@ -218,54 +211,48 @@ def get_clicked_pos(pos, rows, width):
 
 def main(win, width):
     grid = make_grid(ROWS, width)
-    
-    def generate_environment(grid):
-        for row in grid:
-            for spot in row:
-                if random.random() < 0.2:
-                    spot.make_barrier()
-        start = grid[0][0]
-        end = grid[-1][-1]
-        start.make_start()
-        end.make_end()
-        return start, end
+    start, end = None, None
+    agent = None
 
-
-    start = end = None
+    # Button config (defined outside loop)
+    bw, bh, sp = 120, 50, 40
+    total = 2 * bw + sp
+    x0 = (width - total) // 2
+    y0 = width + 20
 
     run = True
     while run:
         draw(win, grid, ROWS, width)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
 
-            elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEMOTION and pygame.mouse.get_pressed()[0]:
-                mx, my = pygame.mouse.get_pos()  # current mouse pos
-                bw, bh, sp = 120, 50, 40
-                total = 2*bw + sp
-                x0 = (width - total)//2
-                y0 = width + 20
+            elif event.type == pygame.MOUSEBUTTONDOWN or (event.type == pygame.MOUSEMOTION and pygame.mouse.get_pressed()[0]):
+                mx, my = pygame.mouse.get_pos()
 
-                # Reset clicked?
-                if event.type == pygame.MOUSEBUTTONDOWN and x0 < mx < x0+bw and y0 < my < y0+bh:
+                if event.type == pygame.MOUSEBUTTONDOWN and x0 < mx < x0 + bw and y0 < my < y0 + bh:
                     grid = make_grid(ROWS, width)
                     start = end = None
+                    agent = None
                     continue
 
-                # Quit clicked?
-                if event.type == pygame.MOUSEBUTTONDOWN and x0+bw+sp < mx < x0+2*bw+sp and y0 < my < y0+bh:
+                if event.type == pygame.MOUSEBUTTONDOWN and x0 + bw + sp < mx < x0 + 2 * bw + sp and y0 < my < y0 + bh:
                     pygame.quit()
                     return
 
-                # Grid area?
                 row, col = get_clicked_pos((mx, my), ROWS, width)
-                if row is None: 
+                if row is None:
                     continue
                 spot = grid[row][col]
 
-                # If dragging or initial click, create barrier
-                if spot not in (start, end):
+                if not start and spot != end:
+                    start = spot
+                    start.make_start()
+                elif not end and spot != start:
+                    end = spot
+                    end.make_end()
+                elif spot not in (start, end) and not spot.is_barrier():
                     spot.make_barrier()
 
             elif event.type == pygame.KEYDOWN:
@@ -276,33 +263,20 @@ def main(win, width):
                     agent = MazeAgent(grid, start, end)
                     agent.act(lambda: draw(win, grid, ROWS, width))
 
-                if agent.path_found:
-                    print("Agent successfully found the path.")
-                else:
-                    print("Agent failed to find a path.")
+                if event.key == pygame.K_c:
+                    grid = make_grid(ROWS, width)
+                    start = end = None
+                    agent = None
 
-
-        if random.random() < 0.05:  # 5% chance each frame
+        # Dynamic environment change
+        if start and end and random.random() < 0.05:
             x = random.randint(0, ROWS - 1)
             y = random.randint(0, ROWS - 1)
-            if grid[x][y] not in [start, end]:
+            if grid[x][y] not in (start, end) and not grid[x][y].is_barrier():
                 grid[x][y].make_barrier()
 
-        # handle explicit left-click without motion (for placing start/end)
-        if pygame.mouse.get_pressed()[0]:
-            mx, my = pygame.mouse.get_pos()
-            row, col = get_clicked_pos((mx,my), ROWS, width)
-            if row is not None:
-                spot = grid[row][col]
-                # first two clicks set start/end
-                if not start:
-                    start = spot
-                    start.make_start()
-                elif not end and spot != start:
-                    end = spot
-                    end.make_end()
-
     pygame.quit()
+
 
 if __name__ == "__main__":
     main(WIN, WIDTH)
